@@ -1,6 +1,6 @@
 /**
  * @name SmartBuffer
- * @version 1.0.0
+ * @version 1.0.1
  */
 
  (global => {
@@ -22,7 +22,7 @@
          */
         constructor(buffer, offset) {
             /** The DataView for this wrapper instance */
-            this.view = new DataView(buffer);
+            this.dataView = new DataView(buffer);
 
             /** 
              * The offset for I/O operations 
@@ -31,20 +31,22 @@
 
             this.offset = offset || 0;
         }
+        
+        /**
+         * Increases current buffers capacity to the new value
+         * @note This function is ignored if the current capacity exceeds the new value
+         * @param {Number} capacity
+         */
+        reallocateIfNeeded(capacity) {
+            let newCapacity = this.offset + capacity;
 
-        allocate(size) {
-            let newSize = this.length + size;
-
-            if (newSize > this.length) {
-                /* Re-allocate the buffer */
-                let buffer = new ArrayBuffer(newSize),
+            if (newCapacity > this.length) {             
+                let buffer = new ArrayBuffer(newCapacity),
                     view = new Uint8Array(buffer);
-
-                /* Transfer the existing data */
+                
                 view.set(new Uint8Array(this.buffer));
 
-                /* Update the view */
-                this.view = new DataView(buffer);
+                this.dataView = new DataView(buffer);
             }
         }
 
@@ -62,7 +64,7 @@
          * @returns {ArrayBuffer}
          */
         get buffer() {
-            return this.view.buffer;
+            return this.dataView.buffer;
         }
 
         /**
@@ -70,7 +72,7 @@
          * @returns {Number}
          */
         get length() {
-            return this.view.byteLength;
+            return this.dataView.byteLength;
         }
 
         /**
@@ -90,7 +92,7 @@
          * @returns {*}
          */
         read(callback, size, endianness, offset) {
-            let value = callback.call(this.view, offset || this.offset, endianness);
+            let value = callback.call(this.dataView, offset || this.offset, endianness);
 
             offset || void(this.offset += size);
 
@@ -106,7 +108,7 @@
          */
 
         write(callback, size, value, endianness) {
-            callback.call(this.view, this.offset, value, endianness);
+            callback.call(this.dataView, this.offset, value, endianness);
 
             this.offset += size;
         }
@@ -238,6 +240,14 @@
         }
 
         /**
+         * Reads a escaped UTF-8 string
+         * @returns {String}
+         */
+         readEscapedString() {
+            return decodeURIComponent(escape(this.readString()));
+        }
+
+        /**
          * Writes a Int8 at the current offset, then 
          * increments the current offset by one byte
          * @param {Number} value
@@ -332,7 +342,7 @@
          * @param {String} value 
          */
         writeString(value) {
-            this.allocate(value.length);
+            this.reallocateIfNeeded(value.length);
             
             for (let index in value)
                 this.writeUInt8(value.charCodeAt(index));
@@ -343,8 +353,8 @@
          * @param {String} value 
          */
         writeStringNT(value) {
-            this.writeString(value);            
-            this.allocate(1);
+            this.writeString(value);
+            this.reallocateIfNeeded(1);
             this.writeUInt8(0);
         }
 
